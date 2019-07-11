@@ -8,7 +8,7 @@ import java.util.Date;
 import static org.junit.Assert.assertEquals;
 
 
-public class Utilities_Test {
+public class LoginActivity_Test {
     /**
      * Test of escapeBr method, of class HtmlEscape.
      */

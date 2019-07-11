@@ -1,7 +1,9 @@
 package com.unlimitedcoffee;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ContentResolver;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.database.Cursor;
 import android.media.AudioFocusRequest;
@@ -9,9 +11,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
+import android.view.ContextMenu;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.Toast;
 
@@ -25,6 +31,12 @@ public class MessageHistoryActivity extends AppCompatActivity {
     MessageHistAdapter msgAdapter;
     ArrayList<String> phoneNumber = new ArrayList<>();
     ArrayList<String> messages = new ArrayList<>();
+    ArrayList <Conversation> conversations = new ArrayList<Conversation>();
+
+    @Override // prevents navigation back to Login or Registration pages
+    public void onBackPressed() {
+        moveTaskToBack(true);
+    }
 
     /**
      * One create method for the message History activity
@@ -40,13 +52,13 @@ public class MessageHistoryActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_message_history);
 
-        /*****/
-        smsListView = (ListView) findViewById(R.id.lvMsg) ;
-        refreshSMSInbox();
+        smsListView = (ListView) findViewById(R.id.lvMsg);
+        registerForContextMenu(smsListView);
+
+        conversations = generateConversationHistory();
         msgAdapter = new MessageHistAdapter (this, phoneNumber , messages);
         smsListView.setAdapter(msgAdapter);
 
-        /*****/
         // assign new message button
         newMsgBtn = (FloatingActionButton) findViewById(R.id.newMsgBtn);
         //send user to new message entry page
@@ -58,10 +70,66 @@ public class MessageHistoryActivity extends AppCompatActivity {
         }
         }); // end newMsgBtn onClick
 
+        smsListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Log.i("HelloListView", "You clicked Item: " + id + " at position:" + position);
+                Intent toMessageThread = new Intent(MessageHistoryActivity.this, MainActivity.class);
+                String selectedMsg = conversations.get(position).getNumber();
+                toMessageThread.putExtra("com.unlimitedcoffee.SELECTED_NUMBER", selectedMsg);
+                startActivity(toMessageThread);
+            }
+        });
+
     } // end onCreate
 
     /**
-     * The following two methods create the menu of options in MainActivity
+     * The following creates a context menu after long press
+     * @param menu
+     * @param v
+     * @param menuInfo
+     */
+    @Override
+    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
+        super.onCreateContextMenu(menu, v, menuInfo);
+        if (v.getId()==R.id.lvMsg) {
+            MenuInflater inflater = getMenuInflater();
+            inflater.inflate(R.menu.context_menu_hist, menu);
+        }
+
+    }
+
+    /**
+     * The following method creates the context menu options during long press
+     * @param item
+     * @returns a boolean confirmation
+     */
+
+    @Override
+    public boolean onContextItemSelected(MenuItem item) {
+        AdapterView.AdapterContextMenuInfo info =
+                (AdapterView.AdapterContextMenuInfo) item.getMenuInfo();    // get ID from adapter
+        final int index = (int) info.id;
+        switch(item.getItemId()) {
+            case R.id.Open_menu:
+
+                Intent toNewMessage = new Intent(MessageHistoryActivity.this, MainActivity.class);
+                String selectedMsg = conversations.get(index).getNumber();
+                toNewMessage.putExtra("com.unlimitedcoffee.SELECTED_NUMBER", selectedMsg);
+                startActivity(toNewMessage);
+                return true;
+            case R.id.Delete_menu:
+
+                deleteMessageThread(index); // delete thread with provided id
+                return true;
+            default:
+                return super.onContextItemSelected(item);
+        }
+    }
+
+
+    /**
+     * The following two methods create the menu of options in MessageHistoryActivity
      * @param menu
      * @return true (boolean)
      */
@@ -89,6 +157,9 @@ public class MessageHistoryActivity extends AppCompatActivity {
                 Intent toNewGrpMessage = new Intent(MessageHistoryActivity.this, MainActivity.class);
                 startActivity(toNewGrpMessage);
                 return true;
+            case R.id.DeleteAll_settings:    // new Group Message
+                deleteAllMessages();
+                return true;
             case R.id.logout:   // logout
                 session.logoutUser();
                 return true;
@@ -101,7 +172,9 @@ public class MessageHistoryActivity extends AppCompatActivity {
         }   // end switch
     }   // end menu option selection
 
-
+    /**
+     * This method refreshes the list display
+     */
     @Override
     public void onResume()
     {  // After a pause OR at startup
@@ -111,6 +184,55 @@ public class MessageHistoryActivity extends AppCompatActivity {
         smsListView.setAdapter(msgAdapter);
     }
 
+    /**
+     * This method generates the conversation history of messages on the phone
+     * @return ArrayList of Conversation objects
+     */
+
+    private ArrayList <Conversation> generateConversationHistory(){
+        ArrayList <String> StoredPhoneNumbers = new ArrayList<String>();
+        ArrayList <Message> StoredMessages = new ArrayList<Message>();
+
+        //pooling text messages from the sms manager
+        Uri inboxURI = Uri.parse("content://sms");
+        String[] requestedColumns = new String[]{"_id", "address", "body", "type"};
+        ContentResolver cr = getContentResolver();
+        Cursor smsInboxCursor = cr.query(inboxURI, requestedColumns, null, null,null);
+        int indexBody = smsInboxCursor.getColumnIndex("body");
+        int indexAddress = smsInboxCursor.getColumnIndex("address");
+        int indexType = smsInboxCursor.getColumnIndex("type");// 2 = sent, etc.)
+        smsInboxCursor.moveToFirst(); // last text sent
+
+        // The next few lines are to group messages per phone number
+        if (indexBody < 0 ||  !smsInboxCursor.moveToNext()) return null;
+        smsInboxCursor.moveToFirst();
+        do {
+
+            if (!StoredPhoneNumbers.contains(smsInboxCursor.getString(indexAddress))){
+                StoredPhoneNumbers.add(smsInboxCursor.getString(indexAddress)); // add phone number
+            }
+            if (smsInboxCursor.getString(indexType).equals("1")) {
+                StoredMessages.add(new Message(smsInboxCursor.getString(indexAddress),
+                        "Received : " + TextEncryption.decrypt(smsInboxCursor.getString(indexBody))));    // add message
+            }
+            if (smsInboxCursor.getString(indexType).equals("2")) {
+                StoredMessages.add(new Message(smsInboxCursor.getString(indexAddress),
+                        "You :" + TextEncryption.decrypt(smsInboxCursor.getString(indexBody))));    // add message
+            }
+
+        } while(smsInboxCursor.moveToNext());
+
+        for (String sNumber: StoredPhoneNumbers) {   // group messages per phone number]
+            ArrayList<String> numMessages = new ArrayList<String>();
+            for (Message m : StoredMessages) {
+                if (m.getNumber().equals(sNumber)) {
+                    numMessages.add(m.getBody());
+                }
+            }
+            conversations.add(new Conversation(sNumber, numMessages)); // add new conversation
+        }
+        return conversations;
+    }
 
     /**
      * This method refreshes the content of the inbox
@@ -119,46 +241,59 @@ public class MessageHistoryActivity extends AppCompatActivity {
     private void refreshSMSInbox() {
         phoneNumber.clear();
         messages.clear();
-        ArrayList <String> StoredPhoneNumbers = new ArrayList<String>();
-        ArrayList <Message> StoredMessages = new ArrayList<Message>();
-        ArrayList <Conversation> conversations = new ArrayList<Conversation>();
-        //pooling text messages from the sms manager
-        Uri inboxURI = Uri.parse("content://sms");
-        String[] requestedColumns = new String[]{"_id", "address", "body"};
-        ContentResolver cr = getContentResolver();
-        Cursor smsInboxCursor = cr.query(inboxURI, requestedColumns, null, null,null);
-        int indexBody = smsInboxCursor.getColumnIndex("body");
-        int indexAddress = smsInboxCursor.getColumnIndex("address");
 
-        smsInboxCursor.moveToFirst(); // last text sent
-
-        // The next few lines are to group messages per phone number
-        if (indexBody < 0 ||  !smsInboxCursor.moveToNext()) return;
-        smsInboxCursor.moveToFirst();
-        do {
-
-            if (!StoredPhoneNumbers.contains(smsInboxCursor.getString(indexAddress))){
-                StoredPhoneNumbers.add(smsInboxCursor.getString(indexAddress)); // add phone number
-            }
-            StoredMessages.add(new Message(smsInboxCursor.getString(indexAddress),
-                    smsInboxCursor.getString(indexBody)));    // add message
-
-        } while(smsInboxCursor.moveToNext());
-
-        for (String sNumber: StoredPhoneNumbers){   // group messages per phone number
-            ArrayList <String> numMessages = new ArrayList<String>();
-            for (Message m: StoredMessages){
-                if (m.getNumber().equals(sNumber)){
-                    numMessages.add(m.getBody());
-                }
-            }
-            conversations.add(new Conversation(sNumber, numMessages));
-        }
-
-        for (Conversation c: conversations) {   // this returns the last phone
+        for (Conversation c: conversations) {   // this returns the last phone number and conversation
             phoneNumber.add(c.getNumber());
             messages.add(c.findLastMessage());
         }
+    }
+
+    /**
+     * This method deletes all message threads in the conversation history
+     */
+
+    private void deleteAllMessages(){
+        AlertDialog.Builder alert = new AlertDialog.Builder(MessageHistoryActivity.this);
+        alert.setMessage(" Are you sure you want to delete all message from this App?");
+        alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                conversations.clear();
+                onResume();
+            }
+        });
+        alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+        alert.create();
+        alert.show();
+    }
+
+    /**
+     * This message removes the conversation record at the index provided
+     * @param threadID
+     */
+    private void deleteMessageThread(final int threadID){
+        AlertDialog.Builder alert = new AlertDialog.Builder(MessageHistoryActivity.this);
+        alert.setMessage(" Are you sure you want to delete this message from this App?");
+        alert.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                conversations.remove(threadID);
+                onResume();
+            }
+        });
+        alert.setNegativeButton("No", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+        });
+        alert.create();
+        alert.show();
     }
 }   // end class
 

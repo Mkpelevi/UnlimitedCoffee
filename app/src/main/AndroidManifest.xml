@@ -14,16 +14,12 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity
-            android:launchMode="singleTask"
-            android:name=".LoginActivity">
+        <activity android:launchMode="singleTask" android:name=".LoginActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
         <receiver
             android:name=".SmsBroadcastReceiver"
             android:exported="true">
@@ -31,17 +27,11 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
-<<<<<<< HEAD
-
         <activity android:name=".MainActivity" />
-=======
-        <activity android:name=".MessageHistoryActivity"/>
-        <activity android:name=".MainActivity"/>
->>>>>>> b513a76dbedff927caba7226b6401b071abb6987
+        <activity android:name=".MessageHistoryActivity" />
         <activity android:name=".RegisterActivity" />
         <activity android:name=".AccountSettingsActivity" />
         <activity android:name=".ContactsSearchActivity"
             android:theme="@style/contacts_search"></activity>
     </application>
-
 </manifest>

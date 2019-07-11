@@ -1,5 +1,6 @@
 package com.unlimitedcoffee;
 
+import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 
@@ -42,24 +43,43 @@ public abstract class TextEncryption {
     }
 
     public static String decrypt(String value) {
-        try {
-            DESKeySpec keySpec = new DESKeySpec(KEY);
-            SecretKeyFactory keyFactory = SecretKeyFactory.getInstance("DES");
-            SecretKey key = keyFactory.generateSecret(keySpec);
+        if (isBase64(value)) {
+            try {
 
-            byte[] encrypedPwdBytes = Base64.decode(value, Base64.DEFAULT);
-            // Implement this in a thread safe way, or switch to AES.
-            Cipher cipher = Cipher.getInstance("DES");
-            cipher.init(Cipher.DECRYPT_MODE, key);
-            byte[] decrypedValueBytes = (cipher.doFinal(encrypedPwdBytes));
+                DESKeySpec keySpec = new DESKeySpec(KEY);
+                SecretKeyFactory keyFactory = SecretKeyFactory.getInstance("DES");
+                SecretKey key = keyFactory.generateSecret(keySpec);
 
-            String decrypedText = new String(decrypedValueBytes);
-            Log.d("Oh snap!", "Decrypted: " + value + " -> " + decrypedText);
-            return decrypedText;
+                byte[] encrypedPwdBytes = Base64.decode(value, Base64.DEFAULT);
+                // Implement this in a thread safe way, or switch to AES.
+                Cipher cipher = Cipher.getInstance("DES");
+                cipher.init(Cipher.DECRYPT_MODE, key);
+                byte[] decrypedValueBytes = (cipher.doFinal(encrypedPwdBytes));
 
-        } catch (InvalidKeyException | InvalidKeySpecException | NoSuchAlgorithmException| BadPaddingException | NoSuchPaddingException | IllegalBlockSizeException  e) {
-            e.printStackTrace();
+                String decrypedText = new String(decrypedValueBytes);
+                Log.d("Oh snap!", "Decrypted: " + value + " -> " + decrypedText);
+                return decrypedText;
+
+            } catch (InvalidKeyException | InvalidKeySpecException | NoSuchAlgorithmException | BadPaddingException | NoSuchPaddingException | IllegalBlockSizeException e) {
+                e.printStackTrace();
+            }
+
+        } else {
+            System.out.println("Not a string!");
         }
         return value;
     }
+
+    public static boolean isBase64(String value) {
+        if (TextUtils.isEmpty(value))
+            return false;
+        try {
+            Base64.decode(value, Base64.DEFAULT);
+            return true;
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }
+
