@@ -28,15 +28,27 @@ public class Conversation {
     }
 
     public String findLastMessage(){
-        return this.messages.get(0);
+        if (messages.size() > 0)
+            return this.messages.get(0);
+        else
+            return "";
     }
 
     public String findLastTimeStamp(){
-        return this.timeStamp.get(0);
+        if (this.timeStamp.size() > 0)
+            return this.timeStamp.get(0);
+        else
+            return "";
+
     }
 
     public String findLastReadStat() {
-        return this.readStat.get(0);
+        if (this.readStat.size() > 0)
+            return this.readStat.get(0);
+        else
+            return "";
+
+
     }
 
 }

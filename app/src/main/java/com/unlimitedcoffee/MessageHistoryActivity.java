@@ -67,7 +67,13 @@ public class MessageHistoryActivity extends AppCompatActivity {
         smsListView.setAdapter(msgAdapter);
 
         PNdatabase = new PNDatabaseHelper(this);
-        checkDatabase();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
+                != PackageManager.PERMISSION_GRANTED) {
+            getPermissionToReadSMS();
+        } else {
+            checkDatabase();;
+        }
+
         // assign new message button
         newMsgBtn = (FloatingActionButton) findViewById(R.id.newMsgBtn);
         //send user to new message entry page
@@ -137,7 +143,7 @@ public class MessageHistoryActivity extends AppCompatActivity {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
-    public void getPermissionToSendSMS() {
+    public void getPermissionToReadSMS() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
             if (shouldShowRequestPermissionRationale(
                     Manifest.permission.READ_SMS)) {
@@ -397,11 +403,7 @@ public class MessageHistoryActivity extends AppCompatActivity {
             ArrayList<String> numTimes = new ArrayList<String>();
             ArrayList<String> numRdStat = new ArrayList<>();
             for (Message m : StoredMessages) {
-                System.out.println("m.getNumber() " + m.getNumber());
-                System.out.println("PNnumbers.getString(index) " + PNnumbers.getString(index));
                 if (m.getNumber().equals("+" + PNnumbers.getString(index))) {
-                    System.out.println("m.getNumber() " + m.getNumber());
-
                     numMessages.add(m.getBody());
                     numTimes.add(m.getTimeStamp());
                     numRdStat.add(m.getReadStat());
@@ -590,6 +592,7 @@ public class MessageHistoryActivity extends AppCompatActivity {
             System.out.println("Content : " + PNInboxCursor.getString(pnIndexAddress));
         } while (PNInboxCursor.moveToNext());
     }
+
 
 }   // end class
 

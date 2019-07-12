@@ -183,6 +183,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 do {
                     String failTimeStr;
                     failTimeStr = cursor.getString(colIndex);
+
                     try { // parse string to Date object
                         thenTime = dateFormat.parse(failTimeStr);
                     } catch (ParseException e) {

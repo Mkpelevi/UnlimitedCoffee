@@ -153,6 +153,11 @@ public class MainActivity extends AppCompatActivity {
                         PNdatabase.addPhoneNumber(sentPhoneNumber.replace("+", "")); // add phone number to the database
                     }
                     Toast.makeText(this, "Message sent!", Toast.LENGTH_SHORT).show();
+
+                    if (text_Phone_Number.isEnabled()) {
+                        text_Phone_Number.setText(phoneNumberAlias(sentPhoneNumber));
+                        text_Phone_Number.setEnabled(false);
+                    }
                     input.setText("");
                 }
             }
