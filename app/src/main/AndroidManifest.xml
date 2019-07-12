@@ -31,7 +31,5 @@
         <activity android:name=".MessageHistoryActivity" />
         <activity android:name=".RegisterActivity" />
         <activity android:name=".AccountSettingsActivity" />
-        <activity android:name=".ContactsSearchActivity"
-            android:theme="@style/contacts_search"></activity>
     </application>
 </manifest>

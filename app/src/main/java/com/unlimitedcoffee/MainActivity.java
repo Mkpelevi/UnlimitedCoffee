@@ -1,12 +1,15 @@
 package com.unlimitedcoffee;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.ContactsContract;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v4.content.ContextCompat;
@@ -33,6 +36,11 @@ public class MainActivity extends AppCompatActivity {
     EditText input;
     EditText text_Phone_Number;
     SmsManager smsManager = SmsManager.getDefault();
+    String actualPhoneNumber;
+    PNDatabaseHelper PNdatabase;    // phone number data base
+
+    //Contact's method variable
+    static final int PICK_CONTACT = 1;
 
 
     private static MainActivity inst;
@@ -65,16 +73,16 @@ public class MainActivity extends AppCompatActivity {
         text_Phone_Number = (EditText) findViewById(R.id.txt_phone_number);
         arrayAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, smsMessagesList);
         messages.setAdapter(arrayAdapter);
-
+        PNdatabase = new PNDatabaseHelper(this);
 
         if (getIntent().hasExtra("com.unlimitedcoffee.SELECTED_NUMBER")) {
             String incomingNumber = getIntent().getStringExtra("com.unlimitedcoffee.SELECTED_NUMBER");
-            text_Phone_Number.setText(incomingNumber);  // transfers
+            actualPhoneNumber = incomingNumber;
+            text_Phone_Number.setText(phoneNumberAlias(incomingNumber));  // transfers
             text_Phone_Number.setEnabled(false);
         } else {
-            text_Phone_Number.setText("");
+            actualPhoneNumber = "";
         }
-
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -104,8 +112,8 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(settings);
                 return true;
             case R.id.contacts_search:
-                Intent contacts_search = new Intent(MainActivity.this, ContactsSearchActivity.class);
-                startActivity(contacts_search);
+                Intent intent = new Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI);
+                startActivityForResult(intent, PICK_CONTACT);
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
@@ -120,22 +128,33 @@ public class MainActivity extends AppCompatActivity {
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     public void onSendClick(View view) {
-        String sentPhoneNumber = text_Phone_Number.getText().toString().trim();
-        if ((sentPhoneNumber.isEmpty()) ){   // check for valid phone number entry
-            Toast.makeText(this, "Enter a valid Phone Number", Toast.LENGTH_SHORT).show();
+        String sentPhoneNumber = actualPhoneNumber;
+        if (actualPhoneNumber.equals("")) {
+            sentPhoneNumber = text_Phone_Number.getText().toString().trim();
+            actualPhoneNumber = sentPhoneNumber;
+        }
+        if (input.getText().toString().isEmpty()){
+            Toast.makeText(this, "Enter a message.", Toast.LENGTH_SHORT).show();
         } else {
-            String textMessage = input.getText().toString();
-            requestPermissions(new String[]{Manifest.permission.SEND_SMS}, SEND_SMS_PERMISSIONS_REQUEST);
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                getPermissionToSendSMS();
+            if ((sentPhoneNumber.isEmpty())) {   // check for valid phone number entry
+                Toast.makeText(this, "Enter a valid Phone Number", Toast.LENGTH_SHORT).show();
             } else {
-                String encryptedText = TextEncryption.encrypt(textMessage);
-                smsManager.sendTextMessage(sentPhoneNumber, null, encryptedText, null, null);
-                String decryptedText = TextEncryption.decrypt(encryptedText);
-                System.out.println(decryptedText);
-                Toast.makeText(this, "Message sent!", Toast.LENGTH_SHORT).show();
-                input.setText("");
+                String textMessage = input.getText().toString();
+                requestPermissions(new String[]{Manifest.permission.SEND_SMS}, SEND_SMS_PERMISSIONS_REQUEST);
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    getPermissionToSendSMS();
+                } else {
+                    String encryptedText = TextEncryption.encrypt(textMessage);
+                    smsManager.sendTextMessage(sentPhoneNumber, null, encryptedText, null, null);
+                    String decryptedText = TextEncryption.decrypt(encryptedText);
+                    System.out.println(decryptedText);
+                    if (!PNdatabase.containsPhoneNumber(sentPhoneNumber.replace("+", ""))) {
+                        PNdatabase.addPhoneNumber(sentPhoneNumber.replace("+", "")); // add phone number to the database
+                    }
+                    Toast.makeText(this, "Message sent!", Toast.LENGTH_SHORT).show();
+                    input.setText("");
+                }
             }
         }
     }
@@ -183,22 +202,84 @@ public class MainActivity extends AppCompatActivity {
         if (indexBody < 0 || !smsInboxCursor.moveToFirst()) return;
         arrayAdapter.clear();
         do {
-            if (smsInboxCursor.getString(indexAddress).equals(text_Phone_Number.getText().toString())) {
+            if (smsInboxCursor.getString(indexAddress).equals(actualPhoneNumber)) {
                 if (smsInboxCursor.getString(indexType).equals("1")) {
-                    String str = "SMS From: " + smsInboxCursor.getString(indexAddress) +
+
+                    String str = "SMS From: " + phoneNumberAlias(smsInboxCursor.getString(indexAddress)) +
                             "\n" + TextEncryption.decrypt(smsInboxCursor.getString(indexBody)) + "\n";
                     arrayAdapter.add(str);
                 }
 
                 if (smsInboxCursor.getString(indexType).equals("2")) {
-                    String str = "SMS To: " + smsInboxCursor.getString(indexAddress) +
+                    String str = "SMS To: " + phoneNumberAlias(smsInboxCursor.getString(indexAddress)) +
                             "\n" + TextEncryption.decrypt(smsInboxCursor.getString(indexBody)) + "\n";
                     arrayAdapter.add(str);
                 }
-
             }
         } while (smsInboxCursor.moveToNext());
         //messages.setSelection(arrayAdapter.getCount() - 1);
+    }
+
+    public String getContactDisplayNameByNumber(String number, Context context) {
+        Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number));
+        String name = "";
+
+        ContentResolver contentResolver = context.getContentResolver();
+        Cursor contactLookup = contentResolver.query(uri, null, null, null, null);
+
+        try {
+            if (contactLookup != null && contactLookup.getCount() > 0) {
+                contactLookup.moveToNext();
+                name += contactLookup.getString(contactLookup.getColumnIndex(ContactsContract.Data.DISPLAY_NAME));
+            }else{
+                name = "";
+            }
+        } finally {
+            if (contactLookup != null) {
+                contactLookup.close();
+            }
+        }
+
+        return name;
+    }
+
+    public String phoneNumberAlias(String phoneNumber){
+        if (getContactDisplayNameByNumber(phoneNumber, this).length() == 0){
+            return phoneNumber;
+        } else {
+            return getContactDisplayNameByNumber(phoneNumber, this);
+        }
+    }
+
+    /*
+    Method to retrieve phone numbers from Contacts list.
+     */
+    public void onActivityResult ( int reqCode, int resultCode, Intent data){
+        super.onActivityResult(reqCode, resultCode, data);
+        switch (reqCode) {
+            case (PICK_CONTACT):
+                if (resultCode == Activity.RESULT_OK) {
+                    Uri contactData = data.getData();
+                    Cursor c = getContentResolver().query(contactData, null, null, null, null);
+                    if (c.moveToFirst()) {
+                        String id = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts._ID));
+                        String hasPhone = c.getString(c.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER));
+
+                            if (hasPhone.equalsIgnoreCase("1")) {
+                                Cursor phones = getContentResolver().query(
+                                        ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null,
+                                        ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = " + id,
+                                        null, null);
+                                phones.moveToFirst();
+                                String phoneTxt = phones.getString(phones.getColumnIndex("data1"));
+                                actualPhoneNumber = phoneTxt.replaceAll("[\\(\\)\\-\\ ]","");
+                                text_Phone_Number.setText(phoneNumberAlias(phoneTxt.replaceAll("[\\(\\)\\-\\ ]","")));
+                                text_Phone_Number.setEnabled(false);
+                            }
+                    }
+                }
+                break;
+        }
     }
 
 }
