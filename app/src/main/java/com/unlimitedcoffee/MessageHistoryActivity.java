@@ -212,10 +212,6 @@ public class MessageHistoryActivity extends AppCompatActivity {
                 Intent toNewMessage = new Intent(MessageHistoryActivity.this, MainActivity.class);
                 startActivity(toNewMessage);
                 return true;
-            case R.id.newGrpMsgBtn_settings:    // new Group Message
-                Intent toNewGrpMessage = new Intent(MessageHistoryActivity.this, MainActivity.class);
-                startActivity(toNewGrpMessage);
-                return true;
             case R.id.refreshBtn:
                 refreshAllMessages();
                 return true;
